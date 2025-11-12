@@ -5,12 +5,17 @@ import com.it.springai.tools.CourseTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -63,8 +68,26 @@ public class CommonConfiguration {
                         MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .defaultTools(courseTools)
                 .build();
+    }
 
-
+    @Bean
+    public VectorStore vectorStore(OpenAiEmbeddingModel embeddingModel) {
+        return SimpleVectorStore.builder(embeddingModel).build();
+    }
+    @Bean
+    public ChatClient pdfChatClient(
+            OpenAiChatModel model,
+            ChatMemory chatMemory,
+            VectorStore vectorStore) {
+        return ChatClient.builder(model)
+                .defaultSystem("请根据提供的上下文回答问题，不要自己猜测。")
+                .defaultAdvisors(// CHAT MEMORY
+                        new SimpleLoggerAdvisor(),
+                        QuestionAnswerAdvisor.builder(vectorStore)
+                                .searchRequest(SearchRequest.builder().similarityThreshold(0.5d).topK(2).build())
+                                .build(),
+                        MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .build();
     }
 
 }
